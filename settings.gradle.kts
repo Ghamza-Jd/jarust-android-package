@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "android_bindings"
+rootProject.name = "jarust-android-package"
 include(":jarust")
