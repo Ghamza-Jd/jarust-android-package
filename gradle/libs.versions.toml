@@ -1,7 +1,9 @@
 [versions]
 androidxCore = "1.12.0"
 jna = "5.13.0"
+rustlsPlatformVerifier = "0.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "androidxCore" }
 jna = { module = "net.java.dev.jna:jna", version.ref = "jna" }
+rustls-platform-verifier = { module = "rustls:rustls-platform-verifier", version.ref = "rustlsPlatformVerifier" }

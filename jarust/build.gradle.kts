@@ -17,16 +17,11 @@ android {
         consumerProguardFiles("consumer-rules.pro")
     }
 
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+
     kotlinOptions {
         jvmTarget = "1.8"
     }
@@ -43,6 +38,7 @@ cargo {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.jna)
+    implementation(libs.rustls.platform.verifier)
 }
 
 tasks.whenTaskAdded {
@@ -67,3 +63,22 @@ afterEvaluate {
         tasks["generate${productFlavor}${buildType}Assets"].setDependsOn(listOf(tasks["cargoBuild"])).isTruthy()
     }
 }
+
+//fun findRustlsPlatformVerifierProject(): URI {
+//    val dependencyText = providers.exec {
+//        workingDir = File("../")
+//        commandLine("cargo", "metadata", "--format-version", "1", "--manifest-path", "./Cargo.toml")
+//    }
+//        .standardOutput
+//        .asText
+//        .get()
+//    val dependencyJson = JsonSlurper().parseText(dependencyText) as Map<*, *>
+//    val packages = dependencyJson["packages"] as List<*>
+//    val targetPackage = packages.find {
+//        val pkgMap = it as Map<*, *>
+//        pkgMap["name"] == "rustls-platform-verifier-android"
+//    } as Map<*, *>
+//    val manifestPath = targetPackage["manifest_path"] as Map<*, *>
+//
+//    return File(manifestPath.parent).toURI()
+//}

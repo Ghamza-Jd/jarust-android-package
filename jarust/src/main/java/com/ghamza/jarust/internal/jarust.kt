@@ -24,6 +24,10 @@ import com.sun.jna.Structure
 import com.sun.jna.ptr.ByReference
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
 // A rust-owned buffer is represented by its capacity, its current length, and a
@@ -40,7 +44,7 @@ open class RustBuffer : Structure() {
 
     companion object {
         internal fun alloc(size: Int = 0) = rustCall() { status ->
-            _UniFFILib.INSTANCE.ffi_jarust_f30a_rustbuffer_alloc(size, status).also {
+            _UniFFILib.INSTANCE.ffi_jarust_cac3_rustbuffer_alloc(size, status).also {
                 if(it.data == null) {
                    throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=${size})")
                }
@@ -48,7 +52,7 @@ open class RustBuffer : Structure() {
         }
 
         internal fun free(buf: RustBuffer.ByValue) = rustCall() { status ->
-            _UniFFILib.INSTANCE.ffi_jarust_f30a_rustbuffer_free(buf, status)
+            _UniFFILib.INSTANCE.ffi_jarust_cac3_rustbuffer_free(buf, status)
         }
     }
 
@@ -253,27 +257,84 @@ internal interface _UniFFILib : Library {
     companion object {
         internal val INSTANCE: _UniFFILib by lazy {
             loadIndirect<_UniFFILib>(componentName = "jarust")
+            .also { lib: _UniFFILib ->
+                FfiConverterTypeRawJaConnectionCallback.register(lib)
+                FfiConverterTypeRawJaEventsCallback.register(lib)
+                FfiConverterTypeRawJaSessionCallback.register(lib)
+                }
             
         }
     }
 
-    fun jarust_f30a_init_logger(
+    fun ffi_jarust_cac3_RawJaContext_object_free(`ptr`: Pointer,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun ffi_jarust_f30a_rustbuffer_alloc(`size`: Int,
+    fun jarust_cac3_RawJaContext_new(`numWorkers`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,
     _uniffi_out_err: RustCallStatus
-    ): RustBuffer.ByValue
+    ): Pointer
 
-    fun ffi_jarust_f30a_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,
-    _uniffi_out_err: RustCallStatus
-    ): RustBuffer.ByValue
-
-    fun ffi_jarust_f30a_rustbuffer_free(`buf`: RustBuffer.ByValue,
+    fun ffi_jarust_cac3_RawJaConnection_object_free(`ptr`: Pointer,
     _uniffi_out_err: RustCallStatus
     ): Unit
 
-    fun ffi_jarust_f30a_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Int,
+    fun jarust_cac3_RawJaConnection_create(`ptr`: Pointer,`ctx`: Pointer,`kaInterval`: Int,`cb`: Long,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun ffi_jarust_cac3_RawJaSession_object_free(`ptr`: Pointer,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun jarust_cac3_RawJaSession_attach(`ptr`: Pointer,`ctx`: Pointer,`pluginId`: RustBuffer.ByValue,`cb`: Long,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun ffi_jarust_cac3_RawJaHandle_object_free(`ptr`: Pointer,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun jarust_cac3_RawJaHandle_message(`ptr`: Pointer,`ctx`: Pointer,`message`: RustBuffer.ByValue,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun jarust_cac3_RawJaHandle_assign_handler(`ptr`: Pointer,`ctx`: Pointer,`cb`: Long,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun ffi_jarust_cac3_RawJaConnectionCallback_init_callback(`callbackStub`: ForeignCallback,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun ffi_jarust_cac3_RawJaSessionCallback_init_callback(`callbackStub`: ForeignCallback,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun ffi_jarust_cac3_RawJaEventsCallback_init_callback(`callbackStub`: ForeignCallback,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun jarust_cac3_raw_jarust_init_logger(
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun jarust_cac3_raw_jarust_connect(`ctx`: Pointer,`config`: RustBuffer.ByValue,`cb`: Long,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun ffi_jarust_cac3_rustbuffer_alloc(`size`: Int,
+    _uniffi_out_err: RustCallStatus
+    ): RustBuffer.ByValue
+
+    fun ffi_jarust_cac3_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,
+    _uniffi_out_err: RustCallStatus
+    ): RustBuffer.ByValue
+
+    fun ffi_jarust_cac3_rustbuffer_free(`buf`: RustBuffer.ByValue,
+    _uniffi_out_err: RustCallStatus
+    ): Unit
+
+    fun ffi_jarust_cac3_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Int,
     _uniffi_out_err: RustCallStatus
     ): RustBuffer.ByValue
 
@@ -282,6 +343,46 @@ internal interface _UniFFILib : Library {
 
 // Public interface members begin here.
 
+
+public object FfiConverterUByte: FfiConverter<UByte, Byte> {
+    override fun lift(value: Byte): UByte {
+        return value.toUByte()
+    }
+
+    override fun read(buf: ByteBuffer): UByte {
+        return lift(buf.get())
+    }
+
+    override fun lower(value: UByte): Byte {
+        return value.toByte()
+    }
+
+    override fun allocationSize(value: UByte) = 1
+
+    override fun write(value: UByte, buf: ByteBuffer) {
+        buf.put(value.toByte())
+    }
+}
+
+public object FfiConverterUInt: FfiConverter<UInt, Int> {
+    override fun lift(value: Int): UInt {
+        return value.toUInt()
+    }
+
+    override fun read(buf: ByteBuffer): UInt {
+        return lift(buf.getInt())
+    }
+
+    override fun lower(value: UInt): Int {
+        return value.toInt()
+    }
+
+    override fun allocationSize(value: UInt) = 4
+
+    override fun write(value: UInt, buf: ByteBuffer) {
+        buf.putInt(value.toInt())
+    }
+}
 
 public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
     // Note: we don't inherit from FfiConverterRustBuffer, because we use a
@@ -329,10 +430,1015 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
     }
 }
 
-fun `initLogger`() =
+
+// Interface implemented by anything that can contain an object reference.
+//
+// Such types expose a `destroy()` method that must be called to cleanly
+// dispose of the contained objects. Failure to call this method may result
+// in memory leaks.
+//
+// The easiest way to ensure this method is called is to use the `.use`
+// helper method to execute a block and destroy the object at the end.
+interface Disposable {
+    fun destroy()
+    companion object {
+        fun destroy(vararg args: Any?) {
+            args.filterIsInstance<Disposable>()
+                .forEach(Disposable::destroy)
+        }
+    }
+}
+
+inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
+    try {
+        block(this)
+    } finally {
+        try {
+            // N.B. our implementation is on the nullable type `Disposable?`.
+            this?.destroy()
+        } catch (e: Throwable) {
+            // swallow
+        }
+    }
+
+// The base class for all UniFFI Object types.
+//
+// This class provides core operations for working with the Rust `Arc<T>` pointer to
+// the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// the Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each `FFIObject` instance holds an opaque pointer to the underlying Rust struct.
+//     Method calls need to read this pointer from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an `FFIObject` is no longer needed, its pointer should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an `FFIObject` instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so will
+//     leak the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+// If we try to implement this with mutual exclusion on access to the pointer, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the pointer, but is interrupted
+//      before it can pass the pointer over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read pointer value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each `FFIObject` an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// In the future we may be able to replace some of this with automatic finalization logic, such as using
+// the new "Cleaner" functionaility in Java 9. The above scheme has been designed to work even if `destroy` is
+// invoked by garbage-collection machinery rather than by calling code (which by the way, it's apparently also
+// possible for the JVM to finalize an object while there is an in-flight call to one of its methods [1],
+// so there would still be some complexity here).
+//
+// Sigh...all of this for want of a robust finalization mechanism.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+abstract class FFIObject(
+    protected val pointer: Pointer
+): Disposable, AutoCloseable {
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    open protected fun freeRustArcPtr() {
+        // To be overridden in subclasses.
+    }
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                this.freeRustArcPtr()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithPointer(block: (ptr: Pointer) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the pointer being freed concurrently.
+        try {
+            return block(this.pointer)
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                this.freeRustArcPtr()
+            }
+        }
+    }
+}
+
+public interface RawJaConnectionInterface {
+    
+    fun `create`(`ctx`: RawJaContext, `kaInterval`: UInt, `cb`: RawJaConnectionCallback)
+    
+}
+
+class RawJaConnection(
+    pointer: Pointer
+) : FFIObject(pointer), RawJaConnectionInterface {
+
+    /**
+     * Disconnect the object from the underlying Rust object.
+     *
+     * It can be called more than once, but once called, interacting with the object
+     * causes an `IllegalStateException`.
+     *
+     * Clients **must** call this method once done with the object, or cause a memory leak.
+     */
+    override protected fun freeRustArcPtr() {
+        rustCall() { status ->
+            _UniFFILib.INSTANCE.ffi_jarust_cac3_RawJaConnection_object_free(this.pointer, status)
+        }
+    }
+
+    override fun `create`(`ctx`: RawJaContext, `kaInterval`: UInt, `cb`: RawJaConnectionCallback) =
+        callWithPointer {
+    rustCall() { _status ->
+    _UniFFILib.INSTANCE.jarust_cac3_RawJaConnection_create(it, FfiConverterTypeRawJaContext.lower(`ctx`), FfiConverterUInt.lower(`kaInterval`), FfiConverterTypeRawJaConnectionCallback.lower(`cb`),  _status)
+}
+        }
+    
+    
+
+    
+}
+
+public object FfiConverterTypeRawJaConnection: FfiConverter<RawJaConnection, Pointer> {
+    override fun lower(value: RawJaConnection): Pointer = value.callWithPointer { it }
+
+    override fun lift(value: Pointer): RawJaConnection {
+        return RawJaConnection(value)
+    }
+
+    override fun read(buf: ByteBuffer): RawJaConnection {
+        // The Rust code always writes pointers as 8 bytes, and will
+        // fail to compile if they don't fit.
+        return lift(Pointer(buf.getLong()))
+    }
+
+    override fun allocationSize(value: RawJaConnection) = 8
+
+    override fun write(value: RawJaConnection, buf: ByteBuffer) {
+        // The Rust code always expects pointers written as 8 bytes,
+        // and will fail to compile if they don't fit.
+        buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
+
+
+public interface RawJaContextInterface {
+    
+}
+
+class RawJaContext(
+    pointer: Pointer
+) : FFIObject(pointer), RawJaContextInterface {
+    constructor(`numWorkers`: UByte?, `name`: String?) :
+        this(
+    rustCallWithError(RawJaException) { _status ->
+    _UniFFILib.INSTANCE.jarust_cac3_RawJaContext_new(FfiConverterOptionalUByte.lower(`numWorkers`), FfiConverterOptionalString.lower(`name`), _status)
+})
+
+    /**
+     * Disconnect the object from the underlying Rust object.
+     *
+     * It can be called more than once, but once called, interacting with the object
+     * causes an `IllegalStateException`.
+     *
+     * Clients **must** call this method once done with the object, or cause a memory leak.
+     */
+    override protected fun freeRustArcPtr() {
+        rustCall() { status ->
+            _UniFFILib.INSTANCE.ffi_jarust_cac3_RawJaContext_object_free(this.pointer, status)
+        }
+    }
+
+    
+
+    
+}
+
+public object FfiConverterTypeRawJaContext: FfiConverter<RawJaContext, Pointer> {
+    override fun lower(value: RawJaContext): Pointer = value.callWithPointer { it }
+
+    override fun lift(value: Pointer): RawJaContext {
+        return RawJaContext(value)
+    }
+
+    override fun read(buf: ByteBuffer): RawJaContext {
+        // The Rust code always writes pointers as 8 bytes, and will
+        // fail to compile if they don't fit.
+        return lift(Pointer(buf.getLong()))
+    }
+
+    override fun allocationSize(value: RawJaContext) = 8
+
+    override fun write(value: RawJaContext, buf: ByteBuffer) {
+        // The Rust code always expects pointers written as 8 bytes,
+        // and will fail to compile if they don't fit.
+        buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
+
+
+public interface RawJaHandleInterface {
+    
+    fun `message`(`ctx`: RawJaContext, `message`: String)
+    
+    fun `assignHandler`(`ctx`: RawJaContext, `cb`: RawJaEventsCallback)
+    
+}
+
+class RawJaHandle(
+    pointer: Pointer
+) : FFIObject(pointer), RawJaHandleInterface {
+
+    /**
+     * Disconnect the object from the underlying Rust object.
+     *
+     * It can be called more than once, but once called, interacting with the object
+     * causes an `IllegalStateException`.
+     *
+     * Clients **must** call this method once done with the object, or cause a memory leak.
+     */
+    override protected fun freeRustArcPtr() {
+        rustCall() { status ->
+            _UniFFILib.INSTANCE.ffi_jarust_cac3_RawJaHandle_object_free(this.pointer, status)
+        }
+    }
+
+    override fun `message`(`ctx`: RawJaContext, `message`: String) =
+        callWithPointer {
+    rustCall() { _status ->
+    _UniFFILib.INSTANCE.jarust_cac3_RawJaHandle_message(it, FfiConverterTypeRawJaContext.lower(`ctx`), FfiConverterString.lower(`message`),  _status)
+}
+        }
+    
+    override fun `assignHandler`(`ctx`: RawJaContext, `cb`: RawJaEventsCallback) =
+        callWithPointer {
+    rustCall() { _status ->
+    _UniFFILib.INSTANCE.jarust_cac3_RawJaHandle_assign_handler(it, FfiConverterTypeRawJaContext.lower(`ctx`), FfiConverterTypeRawJaEventsCallback.lower(`cb`),  _status)
+}
+        }
+    
+    
+
+    
+}
+
+public object FfiConverterTypeRawJaHandle: FfiConverter<RawJaHandle, Pointer> {
+    override fun lower(value: RawJaHandle): Pointer = value.callWithPointer { it }
+
+    override fun lift(value: Pointer): RawJaHandle {
+        return RawJaHandle(value)
+    }
+
+    override fun read(buf: ByteBuffer): RawJaHandle {
+        // The Rust code always writes pointers as 8 bytes, and will
+        // fail to compile if they don't fit.
+        return lift(Pointer(buf.getLong()))
+    }
+
+    override fun allocationSize(value: RawJaHandle) = 8
+
+    override fun write(value: RawJaHandle, buf: ByteBuffer) {
+        // The Rust code always expects pointers written as 8 bytes,
+        // and will fail to compile if they don't fit.
+        buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
+
+
+public interface RawJaSessionInterface {
+    
+    fun `attach`(`ctx`: RawJaContext, `pluginId`: String, `cb`: RawJaSessionCallback)
+    
+}
+
+class RawJaSession(
+    pointer: Pointer
+) : FFIObject(pointer), RawJaSessionInterface {
+
+    /**
+     * Disconnect the object from the underlying Rust object.
+     *
+     * It can be called more than once, but once called, interacting with the object
+     * causes an `IllegalStateException`.
+     *
+     * Clients **must** call this method once done with the object, or cause a memory leak.
+     */
+    override protected fun freeRustArcPtr() {
+        rustCall() { status ->
+            _UniFFILib.INSTANCE.ffi_jarust_cac3_RawJaSession_object_free(this.pointer, status)
+        }
+    }
+
+    override fun `attach`(`ctx`: RawJaContext, `pluginId`: String, `cb`: RawJaSessionCallback) =
+        callWithPointer {
+    rustCall() { _status ->
+    _UniFFILib.INSTANCE.jarust_cac3_RawJaSession_attach(it, FfiConverterTypeRawJaContext.lower(`ctx`), FfiConverterString.lower(`pluginId`), FfiConverterTypeRawJaSessionCallback.lower(`cb`),  _status)
+}
+        }
+    
+    
+
+    
+}
+
+public object FfiConverterTypeRawJaSession: FfiConverter<RawJaSession, Pointer> {
+    override fun lower(value: RawJaSession): Pointer = value.callWithPointer { it }
+
+    override fun lift(value: Pointer): RawJaSession {
+        return RawJaSession(value)
+    }
+
+    override fun read(buf: ByteBuffer): RawJaSession {
+        // The Rust code always writes pointers as 8 bytes, and will
+        // fail to compile if they don't fit.
+        return lift(Pointer(buf.getLong()))
+    }
+
+    override fun allocationSize(value: RawJaSession) = 8
+
+    override fun write(value: RawJaSession, buf: ByteBuffer) {
+        // The Rust code always expects pointers written as 8 bytes,
+        // and will fail to compile if they don't fit.
+        buf.putLong(Pointer.nativeValue(lower(value)))
+    }
+}
+
+
+
+
+data class RawJaConfig (
+    var `uri`: String, 
+    var `apisecret`: String?, 
+    var `rootNamespace`: String?
+) {
+    
+}
+
+public object FfiConverterTypeRawJaConfig: FfiConverterRustBuffer<RawJaConfig> {
+    override fun read(buf: ByteBuffer): RawJaConfig {
+        return RawJaConfig(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: RawJaConfig) = (
+            FfiConverterString.allocationSize(value.`uri`) +
+            FfiConverterOptionalString.allocationSize(value.`apisecret`) +
+            FfiConverterOptionalString.allocationSize(value.`rootNamespace`)
+    )
+
+    override fun write(value: RawJaConfig, buf: ByteBuffer) {
+            FfiConverterString.write(value.`uri`, buf)
+            FfiConverterOptionalString.write(value.`apisecret`, buf)
+            FfiConverterOptionalString.write(value.`rootNamespace`, buf)
+    }
+}
+
+
+
+
+
+sealed class RawJaException(message: String): Exception(message) {
+        // Each variant is a nested class
+        // Flat enums carries a string error message, so no special implementation is necessary.
+        class RuntimeCreationFailure(message: String) : RawJaException(message)
+        
+
+    companion object ErrorHandler : CallStatusErrorHandler<RawJaException> {
+        override fun lift(error_buf: RustBuffer.ByValue): RawJaException = FfiConverterTypeRawJaError.lift(error_buf)
+    }
+}
+
+public object FfiConverterTypeRawJaError : FfiConverterRustBuffer<RawJaException> {
+    override fun read(buf: ByteBuffer): RawJaException {
+        
+            return when(buf.getInt()) {
+            1 -> RawJaException.RuntimeCreationFailure(FfiConverterString.read(buf))
+            else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
+        }
+        
+    }
+
+    override fun allocationSize(value: RawJaException): Int {
+        return 4
+    }
+
+    override fun write(value: RawJaException, buf: ByteBuffer) {
+        when(value) {
+            is RawJaException.RuntimeCreationFailure -> {
+                buf.putInt(1)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+
+}
+
+
+
+
+internal typealias Handle = Long
+internal class ConcurrentHandleMap<T>(
+    private val leftMap: MutableMap<Handle, T> = mutableMapOf(),
+    private val rightMap: MutableMap<T, Handle> = mutableMapOf()
+) {
+    private val lock = java.util.concurrent.locks.ReentrantLock()
+    private val currentHandle = AtomicLong(0L)
+    private val stride = 1L
+
+    fun insert(obj: T): Handle =
+        lock.withLock {
+            rightMap[obj] ?:
+                currentHandle.getAndAdd(stride)
+                    .also { handle ->
+                        leftMap[handle] = obj
+                        rightMap[obj] = handle
+                    }
+            }
+
+    fun get(handle: Handle) = lock.withLock {
+        leftMap[handle]
+    }
+
+    fun delete(handle: Handle) {
+        this.remove(handle)
+    }
+
+    fun remove(handle: Handle): T? =
+        lock.withLock {
+            leftMap.remove(handle)?.let { obj ->
+                rightMap.remove(obj)
+                obj
+            }
+        }
+}
+
+interface ForeignCallback : com.sun.jna.Callback {
+    public fun invoke(handle: Handle, method: Int, args: RustBuffer.ByValue, outBuf: RustBufferByReference): Int
+}
+
+// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+internal const val IDX_CALLBACK_FREE = 0
+
+public abstract class FfiConverterCallbackInterface<CallbackInterface>(
+    protected val foreignCallback: ForeignCallback
+): FfiConverter<CallbackInterface, Handle> {
+    private val handleMap = ConcurrentHandleMap<CallbackInterface>()
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal abstract fun register(lib: _UniFFILib)
+
+    fun drop(handle: Handle): RustBuffer.ByValue {
+        return handleMap.remove(handle).let { RustBuffer.ByValue() }
+    }
+
+    override fun lift(value: Handle): CallbackInterface {
+        return handleMap.get(value) ?: throw InternalException("No callback in handlemap; this is a Uniffi bug")
+    }
+
+    override fun read(buf: ByteBuffer) = lift(buf.getLong())
+
+    override fun lower(value: CallbackInterface) =
+        handleMap.insert(value).also {
+            assert(handleMap.get(it) === value) { "Handle map is not returning the object we just placed there. This is a bug in the HandleMap." }
+        }
+
+    override fun allocationSize(value: CallbackInterface) = 8
+
+    override fun write(value: CallbackInterface, buf: ByteBuffer) {
+        buf.putLong(lower(value))
+    }
+}
+
+// Declaration and FfiConverters for RawJaConnectionCallback Callback Interface
+
+public interface RawJaConnectionCallback {
+    fun `onConnectionSuccess`(`connection`: RawJaConnection)
+    fun `onConnectionFailure`()
+    fun `onSessionCreationSuccess`(`session`: RawJaSession)
+    fun `onSessionCreationFailure`()
+    
+}
+
+// The ForeignCallback that is passed to Rust.
+internal class ForeignCallbackTypeRawJaConnectionCallback : ForeignCallback {
+    @Suppress("TooGenericExceptionCaught")
+    override fun invoke(handle: Handle, method: Int, args: RustBuffer.ByValue, outBuf: RustBufferByReference): Int {
+        val cb = FfiConverterTypeRawJaConnectionCallback.lift(handle)
+        return when (method) {
+            IDX_CALLBACK_FREE -> {
+                FfiConverterTypeRawJaConnectionCallback.drop(handle)
+                // No return value.
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs`
+                0
+            }
+            1 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    val buffer = this.`invokeOnConnectionSuccess`(cb, args)
+                    // Success
+                    outBuf.setValue(buffer)
+                    1
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    -1
+                }
+            }
+            2 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    val buffer = this.`invokeOnConnectionFailure`(cb, args)
+                    // Success
+                    outBuf.setValue(buffer)
+                    1
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    -1
+                }
+            }
+            3 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    val buffer = this.`invokeOnSessionCreationSuccess`(cb, args)
+                    // Success
+                    outBuf.setValue(buffer)
+                    1
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    -1
+                }
+            }
+            4 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    val buffer = this.`invokeOnSessionCreationFailure`(cb, args)
+                    // Success
+                    outBuf.setValue(buffer)
+                    1
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    -1
+                }
+            }
+            
+            else -> {
+                // An unexpected error happened.
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs`
+                try {
+                    // Try to serialize the error into a string
+                    outBuf.setValue(FfiConverterString.lower("Invalid Callback index"))
+                } catch (e: Throwable) {
+                    // If that fails, then it's time to give up and just return
+                }
+                -1
+            }
+        }
+    }
+
+    
+    private fun `invokeOnConnectionSuccess`(kotlinCallbackInterface: RawJaConnectionCallback, args: RustBuffer.ByValue): RustBuffer.ByValue =
+        try {
+            val buf = args.asByteBuffer() ?: throw InternalException("No ByteBuffer in RustBuffer; this is a Uniffi bug")
+            kotlinCallbackInterface.`onConnectionSuccess`(
+                    FfiConverterTypeRawJaConnection.read(buf)
+                    )
+            .let { RustBuffer.ByValue() }
+                // TODO catch errors and report them back to Rust.
+                // https://github.com/mozilla/uniffi-rs/issues/351
+        } finally {
+            RustBuffer.free(args)
+        }
+
+    
+    private fun `invokeOnConnectionFailure`(kotlinCallbackInterface: RawJaConnectionCallback, args: RustBuffer.ByValue): RustBuffer.ByValue =
+        try {
+            kotlinCallbackInterface.`onConnectionFailure`()
+            .let { RustBuffer.ByValue() }
+                // TODO catch errors and report them back to Rust.
+                // https://github.com/mozilla/uniffi-rs/issues/351
+        } finally {
+            RustBuffer.free(args)
+        }
+
+    
+    private fun `invokeOnSessionCreationSuccess`(kotlinCallbackInterface: RawJaConnectionCallback, args: RustBuffer.ByValue): RustBuffer.ByValue =
+        try {
+            val buf = args.asByteBuffer() ?: throw InternalException("No ByteBuffer in RustBuffer; this is a Uniffi bug")
+            kotlinCallbackInterface.`onSessionCreationSuccess`(
+                    FfiConverterTypeRawJaSession.read(buf)
+                    )
+            .let { RustBuffer.ByValue() }
+                // TODO catch errors and report them back to Rust.
+                // https://github.com/mozilla/uniffi-rs/issues/351
+        } finally {
+            RustBuffer.free(args)
+        }
+
+    
+    private fun `invokeOnSessionCreationFailure`(kotlinCallbackInterface: RawJaConnectionCallback, args: RustBuffer.ByValue): RustBuffer.ByValue =
+        try {
+            kotlinCallbackInterface.`onSessionCreationFailure`()
+            .let { RustBuffer.ByValue() }
+                // TODO catch errors and report them back to Rust.
+                // https://github.com/mozilla/uniffi-rs/issues/351
+        } finally {
+            RustBuffer.free(args)
+        }
+
+    
+}
+
+// The ffiConverter which transforms the Callbacks in to Handles to pass to Rust.
+public object FfiConverterTypeRawJaConnectionCallback: FfiConverterCallbackInterface<RawJaConnectionCallback>(
+    foreignCallback = ForeignCallbackTypeRawJaConnectionCallback()
+) {
+    override fun register(lib: _UniFFILib) {
+        rustCall() { status ->
+            lib.ffi_jarust_cac3_RawJaConnectionCallback_init_callback(this.foreignCallback, status)
+        }
+    }
+}
+
+
+
+
+
+
+// Declaration and FfiConverters for RawJaEventsCallback Callback Interface
+
+public interface RawJaEventsCallback {
+    fun `onEvent`(`event`: String)
+    
+}
+
+// The ForeignCallback that is passed to Rust.
+internal class ForeignCallbackTypeRawJaEventsCallback : ForeignCallback {
+    @Suppress("TooGenericExceptionCaught")
+    override fun invoke(handle: Handle, method: Int, args: RustBuffer.ByValue, outBuf: RustBufferByReference): Int {
+        val cb = FfiConverterTypeRawJaEventsCallback.lift(handle)
+        return when (method) {
+            IDX_CALLBACK_FREE -> {
+                FfiConverterTypeRawJaEventsCallback.drop(handle)
+                // No return value.
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs`
+                0
+            }
+            1 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    val buffer = this.`invokeOnEvent`(cb, args)
+                    // Success
+                    outBuf.setValue(buffer)
+                    1
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    -1
+                }
+            }
+            
+            else -> {
+                // An unexpected error happened.
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs`
+                try {
+                    // Try to serialize the error into a string
+                    outBuf.setValue(FfiConverterString.lower("Invalid Callback index"))
+                } catch (e: Throwable) {
+                    // If that fails, then it's time to give up and just return
+                }
+                -1
+            }
+        }
+    }
+
+    
+    private fun `invokeOnEvent`(kotlinCallbackInterface: RawJaEventsCallback, args: RustBuffer.ByValue): RustBuffer.ByValue =
+        try {
+            val buf = args.asByteBuffer() ?: throw InternalException("No ByteBuffer in RustBuffer; this is a Uniffi bug")
+            kotlinCallbackInterface.`onEvent`(
+                    FfiConverterString.read(buf)
+                    )
+            .let { RustBuffer.ByValue() }
+                // TODO catch errors and report them back to Rust.
+                // https://github.com/mozilla/uniffi-rs/issues/351
+        } finally {
+            RustBuffer.free(args)
+        }
+
+    
+}
+
+// The ffiConverter which transforms the Callbacks in to Handles to pass to Rust.
+public object FfiConverterTypeRawJaEventsCallback: FfiConverterCallbackInterface<RawJaEventsCallback>(
+    foreignCallback = ForeignCallbackTypeRawJaEventsCallback()
+) {
+    override fun register(lib: _UniFFILib) {
+        rustCall() { status ->
+            lib.ffi_jarust_cac3_RawJaEventsCallback_init_callback(this.foreignCallback, status)
+        }
+    }
+}
+
+
+
+
+
+
+// Declaration and FfiConverters for RawJaSessionCallback Callback Interface
+
+public interface RawJaSessionCallback {
+    fun `onAttachSuccess`(`handle`: RawJaHandle)
+    fun `onAttachFailure`()
+    
+}
+
+// The ForeignCallback that is passed to Rust.
+internal class ForeignCallbackTypeRawJaSessionCallback : ForeignCallback {
+    @Suppress("TooGenericExceptionCaught")
+    override fun invoke(handle: Handle, method: Int, args: RustBuffer.ByValue, outBuf: RustBufferByReference): Int {
+        val cb = FfiConverterTypeRawJaSessionCallback.lift(handle)
+        return when (method) {
+            IDX_CALLBACK_FREE -> {
+                FfiConverterTypeRawJaSessionCallback.drop(handle)
+                // No return value.
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs`
+                0
+            }
+            1 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    val buffer = this.`invokeOnAttachSuccess`(cb, args)
+                    // Success
+                    outBuf.setValue(buffer)
+                    1
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    -1
+                }
+            }
+            2 -> {
+                // Call the method, write to outBuf and return a status code
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs` for info
+                try {
+                    val buffer = this.`invokeOnAttachFailure`(cb, args)
+                    // Success
+                    outBuf.setValue(buffer)
+                    1
+                } catch (e: Throwable) {
+                    // Unexpected error
+                    try {
+                        // Try to serialize the error into a string
+                        outBuf.setValue(FfiConverterString.lower(e.toString()))
+                    } catch (e: Throwable) {
+                        // If that fails, then it's time to give up and just return
+                    }
+                    -1
+                }
+            }
+            
+            else -> {
+                // An unexpected error happened.
+                // See docs of ForeignCallback in `uniffi/src/ffi/foreigncallbacks.rs`
+                try {
+                    // Try to serialize the error into a string
+                    outBuf.setValue(FfiConverterString.lower("Invalid Callback index"))
+                } catch (e: Throwable) {
+                    // If that fails, then it's time to give up and just return
+                }
+                -1
+            }
+        }
+    }
+
+    
+    private fun `invokeOnAttachSuccess`(kotlinCallbackInterface: RawJaSessionCallback, args: RustBuffer.ByValue): RustBuffer.ByValue =
+        try {
+            val buf = args.asByteBuffer() ?: throw InternalException("No ByteBuffer in RustBuffer; this is a Uniffi bug")
+            kotlinCallbackInterface.`onAttachSuccess`(
+                    FfiConverterTypeRawJaHandle.read(buf)
+                    )
+            .let { RustBuffer.ByValue() }
+                // TODO catch errors and report them back to Rust.
+                // https://github.com/mozilla/uniffi-rs/issues/351
+        } finally {
+            RustBuffer.free(args)
+        }
+
+    
+    private fun `invokeOnAttachFailure`(kotlinCallbackInterface: RawJaSessionCallback, args: RustBuffer.ByValue): RustBuffer.ByValue =
+        try {
+            kotlinCallbackInterface.`onAttachFailure`()
+            .let { RustBuffer.ByValue() }
+                // TODO catch errors and report them back to Rust.
+                // https://github.com/mozilla/uniffi-rs/issues/351
+        } finally {
+            RustBuffer.free(args)
+        }
+
+    
+}
+
+// The ffiConverter which transforms the Callbacks in to Handles to pass to Rust.
+public object FfiConverterTypeRawJaSessionCallback: FfiConverterCallbackInterface<RawJaSessionCallback>(
+    foreignCallback = ForeignCallbackTypeRawJaSessionCallback()
+) {
+    override fun register(lib: _UniFFILib) {
+        rustCall() { status ->
+            lib.ffi_jarust_cac3_RawJaSessionCallback_init_callback(this.foreignCallback, status)
+        }
+    }
+}
+
+
+
+
+public object FfiConverterOptionalUByte: FfiConverterRustBuffer<UByte?> {
+    override fun read(buf: ByteBuffer): UByte? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterUByte.read(buf)
+    }
+
+    override fun allocationSize(value: UByte?): Int {
+        if (value == null) {
+            return 1
+        } else {
+            return 1 + FfiConverterUByte.allocationSize(value)
+        }
+    }
+
+    override fun write(value: UByte?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterUByte.write(value, buf)
+        }
+    }
+}
+
+
+
+
+public object FfiConverterOptionalString: FfiConverterRustBuffer<String?> {
+    override fun read(buf: ByteBuffer): String? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterString.read(buf)
+    }
+
+    override fun allocationSize(value: String?): Int {
+        if (value == null) {
+            return 1
+        } else {
+            return 1 + FfiConverterString.allocationSize(value)
+        }
+    }
+
+    override fun write(value: String?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterString.write(value, buf)
+        }
+    }
+}
+
+fun `rawJarustInitLogger`() =
     
     rustCall() { _status ->
-    _UniFFILib.INSTANCE.jarust_f30a_init_logger( _status)
+    _UniFFILib.INSTANCE.jarust_cac3_raw_jarust_init_logger( _status)
+}
+
+
+fun `rawJarustConnect`(`ctx`: RawJaContext, `config`: RawJaConfig, `cb`: RawJaConnectionCallback) =
+    
+    rustCall() { _status ->
+    _UniFFILib.INSTANCE.jarust_cac3_raw_jarust_connect(FfiConverterTypeRawJaContext.lower(`ctx`), FfiConverterTypeRawJaConfig.lower(`config`), FfiConverterTypeRawJaConnectionCallback.lower(`cb`), _status)
 }
 
 
